@@ -35,17 +35,16 @@ router.use('/reg', function (req, res, next) {
 //get POI by ID
 router.get('/getPOI/:id', function(req,res){
     var POiId=req.params.id;
-    DButilsAzure.execQuery("select * from POl where ID= '"+POiId+"'")
+    DButilsAzure.execQuery("select POl.ID,POl.name,POl.discription,POl.rank,POl.views,POIPictures.picture,POICategories.category from POl join POIPictures on pol.ID=POIPictures.POID join POICategories on POIPictures.POID=POICategories.POID  where ID= '"+POiId+"'")
         .then(function (result) {
             if (result.length>0)
                 {
                     res.send(result[0]);
                 }
                 else
-            {
-                res.send("POI not exist");
-            }
-            res.send(data);
+                {
+                    res.send("POI not exist");
+                }
         }).catch(function (err) {
         console.log(err)
 
@@ -53,7 +52,7 @@ router.get('/getPOI/:id', function(req,res){
 });
 //getAllPOI
 router.get('/getAllPOI', function(req,res){
-    DButilsAzure.execQuery("select * from POl ")
+    DButilsAzure.execQuery("select p.name,p.discription,p.discription,p.ID,p.rank,p.views,pic.picture,cat.category from POl p join  POIPictures pic on pic.POID=p.ID join POICategories cat on cat.POID=pic.POID ")
         .then(function (result) {
             res.send(result);
         }).catch(function (err) {
@@ -62,12 +61,24 @@ router.get('/getAllPOI', function(req,res){
     })
 });
 // getPopular POI by minimum rank and amount
+router.get('/getPicture', function(req,res){
+    var ID=req.param("ID");
+    DButilsAzure.execQuery("select picture from POIPictures where POID = ' "+ID+"'")
+        .then(function (result) {
+            res.send(result);
+        }).catch(function (err) {
+        console.log(err)
+
+    })
+});
 router.get('/getPopularPOI', function(req,res){
     var rank=req.param("rank");
     var amount=req.param("amount");
 
-    DButilsAzure.execQuery("select * from POl where rank>='"+rank+"'")
+    DButilsAzure.execQuery("select * from POl Inner join POIPictures on pol.ID=POIPictures.POID where rank>= '"+rank+"'")
         .then(function (result) {
+
+
             if (result.length>amount)
             {
                 var toReturn= [];
@@ -98,7 +109,7 @@ router.get('/getPopularPOI', function(req,res){
     })
 });
 // get Last Uploaded POI
-router.get('/getLastUploadedPOI/:amount', function(req,res){
+router.get('/reg/`getLastUploadedPOI/:amount', function(req,res){
     var amount=req.params.amount;
     DButilsAzure.execQuery("select * from POl Order By uploadTime DESC ")
         .then(function (result) {
@@ -179,9 +190,9 @@ router.get('/getPOIByName/:name', function(req,res){
     })
 });
 //deletePOIFromFavorits
-router.delete('/reg/deletePOIFromFavorits',function(req,res){
+router.delete('/reg/deletePOIFromFavorits/:id',function(req,res){
     var userName= req.decoded.payload.userName;
-    var poiID=req.body.id;
+    var poiID=req.params.id;
     DButilsAzure.execQuery("delete from savedPOI where username = '"+userName+"' and POIID='"+poiID+"'")
         .then(function (result) {
             res.send("POI "+poiID + " has been removed from favorites of username "+userName);
@@ -197,14 +208,15 @@ router.post('/reg/postPOIReviwe', function(req,res){
     var poiID=req.body.id;
     var userName= req.decoded.payload.userName;
     var POIreviwe=req.body.reviwe;
-    DButilsAzure.execQuery("select * from POIReviews where username = '"+ userName+"' and POID='"+poiID+"'")
+    var timeStamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    DButilsAzure.execQuery("select * from POIReviews where username = '"+ userName+"' and POID='"+poiID+"'" )
         .then(function (result) {
             if ( result.length>0)
             {
                 res.send("user name allready ranked this POI")
             }
             else {
-                DButilsAzure.execQuery("Insert into POIReviews (POID,username,review) VALUES ( '" + poiID + "','" + userName + "','" + POIreviwe + "')")
+                DButilsAzure.execQuery("Insert into POIReviews (POID,username,review,date) VALUES ( '" + poiID + "','" + userName + "','" + POIreviwe + "','"+timeStamp+"')")
                     .then(function (result) {
                         res.send("Review has been uploaded");
                     }).catch(function (err) {
@@ -259,24 +271,15 @@ router.post('/reg/postPOIRank', function(req,res){
 router.get('/reg/getSavedPOI', function(req,res){
     var userName= req.decoded.payload.userName;
     var toReturn=[];
-    DButilsAzure.execQuery("select POIID from savedPOI where username = '"+userName+"'")
+    DButilsAzure.execQuery("select * from POl join savedPOI on POl.ID=savedPOI.POIID where savedPOI.username= '" +userName+"' order by Time desc")
         .then(function (result) {
-            for(let i=0;i<result.length;i++)
-            {
-                DButilsAzure.execQuery("select * from POl where ID= '"+result[i].POIID+"'")
-                    .then(function (result) {
-                        toReturn.push(result[0])
-                        if (i==result.length)
-                            res.send(toReturn);
-                    }).catch(function (err) {
-                        console.log(err)
-                })
-            }
             if (result.length==0)
                 res.send("there are no saved categories")
+            else
+                res.send(result);
         }).catch(function (err) {
-        console.log(err)
-         })
+            console.log(err)
+        })
 });
 
 //get 2 popular poi by 2 difrent user categories
@@ -292,41 +295,31 @@ router.get('/reg/get2PopularByUserCat', function(req,res){
                 randVal2= Math.floor((Math.random()*result.length));
             var secCat=result[randVal2].category;
             var toReturn=[];
-            DButilsAzure.execQuery("select * from POICategories JOIN POl ON  POICategories.POID=POl.ID  where POICategories.category = '"+firstCat+"'")
+            DButilsAzure.execQuery("select * from POICategories JOIN POl ON  POICategories.POID=POl.ID  where POICategories.category = '"+firstCat+"' Order by rank desc")
                 .then(function (result1) {
                     var poiToReturn=[];
-                    var randVal= Math.floor((Math.random()*result1.length));
-                    poiToReturn[0]=result1[randVal];
-                    var randVal2= Math.floor((Math.random()*result1.length));
-                    while (randVal==randVal2)
-                        randVal2= Math.floor((Math.random()*result1.length));
-                    poiToReturn[1]=result1[randVal2];
+                    poiToReturn[0]=result1[0];
                     toReturn[0]=poiToReturn;
+                    DButilsAzure.execQuery("select * from POICategories JOIN POl ON  POICategories.POID=POl.ID  where POICategories.category = '"+secCat+"' Order by rank desc")
+                        .then(function (result2) {
+                            poiToReturn[1]=result2[0];
+                            toReturn[1]=poiToReturn;
+                            res.send(toReturn);
+                        }).catch(function (err) {
+                        console.log(err)
+
+                    })
+
+
                 }).catch(function (err) {
                 console.log(err)
 
             })
-            DButilsAzure.execQuery("select * from POICategories JOIN POl ON  POICategories.POID=POl.ID  where POICategories.category = '"+secCat+"'")
-                .then(function (result2) {
-                    var poiToReturn=[];
-                    var randVal= Math.floor((Math.random()*result2.length));
-                    poiToReturn[0]=result2[randVal];
-                    var randVal2= Math.floor((Math.random()*result2.length));
-                    while (randVal==randVal2)
-                        randVal2= Math.floor((Math.random()*result2.length));
-                    poiToReturn[1]=result2[randVal2];
-                    toReturn[1]=poiToReturn;
-                    res.send(toReturn);
                 }).catch(function (err) {
                 console.log(err)
 
             })
 
-
-        }).catch(function (err) {
-        console.log(err)
-
-    })
 });
 
 // updateViews
@@ -345,6 +338,23 @@ router.post('/updateViews/:poiID', function(req,res){
         }).catch(function (err) {
         console.log(err)
         res.send("error");
+
+    })
+});
+router.get('/getPoiReviews/:id', function(req,res){
+    var POiId=req.params.id;
+    DButilsAzure.execQuery("select * from POIReviews where POID = '"+POiId+"' order by date desc")
+        .then(function (result) {
+            if (result.length>0)
+            {
+                res.send(result);
+            }
+            else
+            {
+                res.send("results not exist");
+            }
+        }).catch(function (err) {
+        console.log(err)
 
     })
 });

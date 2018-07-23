@@ -32,6 +32,23 @@ router.use('/reg', function (req, res, next) {
         })
     }
 });
+// authanticate token
+router.get('/authonticateToken/:token', function(req,res){
+    var token=req.params.token;
+
+    if (token)
+    {
+    jwt.verify(token, superSecret, function (err, decoded) {
+        if (err) {
+            return res.json({success: false, message: 'Failed to authenticate token.'});
+        }
+        else {
+            let decoded=jwt.decode(token,{complete: true})
+            return res.json({success: true, message: 'Succeeded authonticate',username: decoded.payload.userName});
+        }
+    })
+    }
+});
 //register
 router.post('/register',function(req,res){
      var userName=req.body.userName;
@@ -115,9 +132,10 @@ router.post('/getPassword', function(req,res){
 });
 //login
 router.post('/login', function(req,res){
-
    var userName=req.body.userName;
    var userPas=req.body.password;
+   console.log(userPas);
+   console.log("here");
     DButilsAzure.execQuery("select password from Users where username= '"+userName+"'")
         .then(function (result) {
             if (result.length>0&&result[0].password==userPas)
